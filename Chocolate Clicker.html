@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chocolate Clicker</title>
+<style>
+:root{--d:#24120c;--m:#5a3222;--g:#e0a43a;--cr:#fff1da;--p:#ff6f91;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}*{box-sizing:border-box}
+body{margin:0;font:14px system-ui,sans-serif;background:linear-gradient(var(--b1,#2a140d),var(--b2,#5b3320)) fixed;color:var(--cr);min-height:100vh}
+nav{display:flex;gap:4px;overflow-x:auto;padding:6px;background:#1a0b07}
+nav button{flex:none;background:var(--m);color:var(--cr);border:0;border-radius:8px;padding:8px 12px;cursor:pointer}
+nav button.on,button.go{background:var(--g);color:#2a140d;font-weight:700}
+#app{display:grid;grid-template-columns:300px 1fr;gap:8px;padding:8px}
+#left{text-align:center;background:#0003;border-radius:12px;padding:10px;align-self:start}
+#choc{font-size:26px;font-weight:800;color:var(--g)}
+#bar{width:min(220px,60vw);aspect-ratio:3/4;border:0;border-radius:18px;margin:10px auto;display:block;cursor:pointer;position:relative;
+background:linear-gradient(90deg,transparent 49%,#0007 49% 51%,transparent 51%),linear-gradient(0deg,transparent 32%,#0007 32% 34%,transparent 34% 65%,#0007 65% 67%,transparent 67%),linear-gradient(135deg,#7a4426,#2e150c);
+box-shadow:inset 0 0 0 6px #4a2616,0 10px 30px #0008;transition:transform .08s}
+#bar:active{transform:scale(.95)}#bar.s1{box-shadow:inset 0 0 0 6px var(--g),0 0 30px #e0a43a99}#bar.s2{box-shadow:inset 0 0 0 6px var(--p),0 0 30px #ff6f9199}
+.red *{animation:none!important;transition:none!important}
+#main{min-width:0}#gv{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.col{background:#0003;border-radius:12px;padding:8px;max-height:calc(100vh - 110px);overflow:auto}
+#panel{background:#0003;border-radius:12px;padding:8px;max-height:calc(100vh - 110px);overflow:auto}
+.card{display:flex;gap:8px;align-items:center;background:var(--m);border-radius:10px;padding:8px;margin-bottom:6px}
+.card.dim{opacity:.6}.card>div:nth-child(2){flex:1;min-width:0}.ic{font-size:26px}
+.card button,.b{background:var(--p);color:#2a140d;border:0;border-radius:8px;padding:6px 10px;cursor:pointer;font-weight:700}
+button:disabled{opacity:.4;cursor:not-allowed}small{opacity:.8}
+.bar{height:8px;background:#0006;border-radius:5px;overflow:hidden}.bar i{display:block;height:100%;background:var(--g)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px}
+.chip{display:inline-block;background:var(--g);color:#2a140d;border-radius:12px;padding:2px 8px;margin:2px;font-size:12px}
+#toasts{position:fixed;right:8px;top:calc(8px + env(safe-area-inset-top,0px));z-index:9;display:grid;gap:4px;max-width:80vw}
+.t{background:#000c;border-left:4px solid var(--g);padding:8px;border-radius:6px}
+.gold{position:fixed;z-index:8;font-size:44px;cursor:pointer;animation:pop 1s infinite alternate;background:none;border:0}
+@keyframes pop{to{transform:scale(1.2) rotate(10deg)}}
+.fl{position:fixed;pointer-events:none;font-weight:800;color:var(--g);animation:up .9s forwards;z-index:7;text-shadow:0 1px 2px #000}
+@keyframes up{to{transform:translateY(-70px);opacity:0}}
+input,select,textarea{background:#1a0b07;color:var(--cr);border:1px solid var(--m);border-radius:6px;padding:6px;max-width:100%}
+footer{text-align:center;padding:10px;opacity:.7;font-size:12px}footer button{background:none;border:0;color:var(--g);cursor:pointer}
+#load{position:fixed;inset:0;background:#24120c;display:grid;place-items:center;z-index:20;font-size:22px}
+@media(max-width:900px){#app{grid-template-columns:1fr}#gv{grid-template-columns:1fr}.col,#panel{max-height:none}}
+</style></head><body>
+<div id="load">🍫 Loading…</div>
+<nav id="nav"></nav>
+<div id="app"><aside id="left">
+ <div>Chocolate</div><div id="choc">0</div>
+ <div>per second: <b id="cps">0</b> · per click: <b id="cpc">0</b></div>
+ <div>Lifetime: <b id="life">0</b> · 💎 <b id="gems">0</b></div>
+ <button id="bar" aria-label="Chocolate bar: click to earn Chocolate"></button>
+ <div id="buffs"></div></aside>
+<main id="main"><div id="gv"><div class="col" id="bld"></div><div class="col" id="shop"></div></div><div id="panel" hidden></div></main></div>
+<footer>Original game inspired by the clicker genre (Cookie Clicker by Orteil). No code or art from any other project. <button id="devbtn" data-a="dev">Local dev panel</button></footer>
+<div id="toasts"></div>
+<script>
+"use strict";
+const DEV=true; /* set to false before publishing: removes the dev panel entirely */
+const $=s=>document.querySelector(s),CAP=1e300,KEY="choco_v1";
+const SUF=["","K","M","B","T","Qa","Qi","Sx","Sp","Oc","No","Dc"];
+let S,K,adm=false,tab="game",last={},fails=0,lockT=0,bm=1;
+const fmt=n=>{n=Math.min(Math.max(+n||0,0),CAP);if(n<1000)return n<10&&n%1?n.toFixed(1):String(Math.floor(n));
+ if(S&&S.set.sci||n>=1e36)return n.toExponential(2).replace("+","");const e=Math.floor(Math.log10(n)/3);return(n/10**(e*3)).toFixed(2)+SUF[e]};
+const BN=[["Cocoa Garden","🌱",15,.1,"Tiny beds of cocoa pods."],["Chocolate Mixer","🥣",100,1,"Stirs liquid gold nonstop."],["Candy Workshop","🍬",1100,8,"Elves hand-craft bonbons."],["Chocolate Bakery","🧁",12e3,47,"Brownies by the thousand."],["Cocoa Plantation","🌴",13e4,260,"Endless rows of cacao."],["Sweet Factory","🏭",14e5,1400,"Conveyor belts of cocoa."],["Chocolate Laboratory","🧪",2e7,7800,"Experimental flavor science."],["Automated Confectioner","🤖",33e7,44e3,"Robots that never nap."],["Chocolate Mine","⛏️",51e8,26e4,"Dig up veins of fudge."],["Golden Cocoa Reactor","⚛️",75e9,16e5,"Fuses cocoa into gold."],["Interdimensional Factory","🌀",1e12,1e7,"Imports sweets from other realities."],["Ultimate Chocolate Creator","👑",14e12,65e6,"Wills chocolate into being."]];
+const W=[["Cocoa Village","🏡",0,"#2a140d,#5b3320"],["Caramel Kingdom","🏰",1e5,"#4a2c0a,#b97a1e"],["Strawberry Valley","🍓",1e7,"#4a1226,#c2456b"],["Mint Crystal Forest","💎",1e9,"#0d3b34,#2fa58c"],["Lava Chocolate Realm","🌋",1e11,"#2a0a05,#b3300f"],["Cosmic Cocoa Galaxy","🌌",1e13,"#120a2e,#4b2a8a"],["Ancient Dessert Temple","🏛️",1e15,"#3a2a14,#a88a4a"],["Ultimate Chocolate Dimension","✨",1e17,"#1a0a14,#e0a43a"]];
+const RN=["Common","Uncommon","Rare","Epic","Legendary","Mythic"];
+const PN_=["Cocoa Bunny","Fudge Mouse","Cocoa Duckling","Truffle Hamster","Bean Beetle","Caramel Fox","Strawberry Cat","Marshmallow Bear","Mocha Pup","Praline Penguin","Mint Slime","Hazelnut Squirrel","Toffee Turtle","Berry Owl","Wafer Wolf","Golden Cocoa Bee","Lava Fudge Salamander","Crystal Mint Stag","Nebula Cocoa Moth","Sundae Sphinx","Chocolate Dragon","Chocolate Phoenix","Starlight Unicorn","Caramel Griffin","Cocoa Kraken","Eclipse Truffle Wyrm","Cacao Titan","Aurora Bonbon Fairy","Dimension Dessert Dragon","Great Cocoa Spirit"];
+const PE="🐰🐭🦆🐹🪲🦊🐱🐻🐶🐧🟢🐿️🐢🦉🐺🐝🦎🦌🦋🐈🐉🔥🦄🦅🐙🐍🗿🧚🐲👻".match(/\p{Extended_Pictographic}\uFE0F?|🟢/gu);
+const P=PN_.map((n,i)=>({n,e:PE[i],r:Math.floor(i/5),cost:250*3**i,type:i%2?"c":"p",pct:1+(i%5)*.5+Math.floor(i/5)*3}));
+// upgrades
+const U=[];const T3=["Fertilizer","Overdrive","Mastery"];
+BN.forEach((b,i)=>[5,25,50].forEach((th,t)=>U.push({n:`${b[0]} ${T3[t]}`,d:`${b[0]} output ×${t?3:2}`,c:b[2]*[10,50,500][t],e:{t:"b",i,m:t?3:2},rq:`Own ${th} ${b[0]}`,ok:()=>S.b[i]>=th})));
+["Sturdy Fingers","Cocoa Gloves","Golden Thumb","Titan Grip","Cosmic Touch","Infinite Tap"].forEach((n,k)=>U.push({n,d:"Click strength ×2",c:500*8**k,e:{t:"k",m:2},rq:`${fmt([50,500,2e3,1e4,5e4,2e5][k])} clicks`,ok:()=>S.clicks>=[50,500,2e3,1e4,5e4,2e5][k]}));
+["Lucky Fingers","Sharp Taste","Critical Cravings","Brutal Bites"].forEach((n,k)=>U.push({n,d:k%2?"Critical damage +3×":"Critical chance +3%",c:1e4*20**k,e:k%2?{t:"cm",v:3}:{t:"cc",v:.03},rq:`${fmt(1e3*5**k)} clicks`,ok:()=>S.clicks>=1e3*5**k}));
+["Roomy Den","Pet Treats","Cozy Beds","Bonded Souls"].forEach((n,k)=>U.push({n,d:k%2?"Pet bonuses ×1.25":"+1 equipped pet slot",c:1e5*30**k,e:k%2?{t:"pm",m:1.25}:{t:"slot"},rq:`Own ${k+1} pet${k?"s":""}`,ok:()=>Object.keys(S.pets).length>=k+1}));
+W.forEach((w,i)=>U.push({n:`${w[0]} Blessing`,d:"All production ×1.15 (world special)",c:5e3*30**i,e:{t:"g",m:1.15},rq:`Unlock ${w[0]}`,ok:()=>S.worlds.includes(i)}));
+["Better Wrappers","Gold Foil","Fair Trade","Mega Marketing","Chocolate Fever","Sweet Monopoly"].forEach((n,k)=>U.push({n,d:"All production ×1.1",c:1e6*40**k,e:{t:"g",m:1.1},rq:`Own ${50*(k+1)} buildings`,ok:()=>S.b.reduce((a,b)=>a+b,0)>=50*(k+1)}));
+U.forEach((u,i)=>u.id="u"+i);const UM=Object.fromEntries(U.map(u=>[u.id,u]));
+// skills
+const BR=[["k","Clicking",5,"Click ×1.25"],["p","Production",5,"Production ×1.1"],["pm","Pets",4,"Pet bonus ×1.1"],["cc","Critical Clicks",4,"Crit chance +2%"],["w","Exploration",4,"World bonuses ×1.1"],["o","Offline Production",4,"Offline efficiency +10%"],["f","Factory Efficiency",4,"Building cost −3%"],["pg","Prestige",5,"Prestige gain ×1.1"]];
+const SKL=[];BR.forEach((b,bi)=>{for(let k=0;k<b[2];k++)SKL.push({id:b[0]+k,b:b[1],n:`${b[1]} ${k+1}`,d:b[3],e:b[0],cost:1+Math.floor(k/2),pre:k?b[0]+(k-1):bi?"k0":null})});
+const SM=Object.fromEntries(SKL.map(s=>[s.id,s]));
+// achievements
+const A=[];const a_=(id,n,cur,t,g=1)=>A.push({id,n,cur,t,g});
+[1e3,1e5,1e7,1e9,1e11,1e13,1e15,1e18,1e21,1e24,1e30,1e36].forEach(t=>a_("l"+t,`Bake ${fmt(t)} Chocolate`,()=>S.ever,t));
+[1,100,1e3,5e3,25e3,1e5,5e5,1e6].forEach(t=>a_("c"+t,`Click ${fmt(t)} times`,()=>S.clicks,t));
+BN.forEach((b,i)=>a_("b"+i,`Own 25 ${b[0]}`,()=>S.b[i],25));
+[5,10,20,30,40,50].forEach(t=>a_("u"+t,`Buy ${t} upgrades`,()=>Object.keys(S.up).length,t));
+[1,5,10,20,30].forEach(t=>a_("p"+t,`Collect ${t} pets`,()=>Object.keys(S.pets).length,t));
+[2,4,6,8].forEach(t=>a_("w"+t,`Unlock ${t} worlds`,()=>S.worlds.length,t,2));
+[1,10,50].forEach(t=>a_("g"+t,`Catch ${t} Golden Chocolates`,()=>S.gold,t));
+a_("pr","Prestige for the first time",()=>S.pres,1,3);
+const QD=[["Click 150 times",150,2],["Buy 25 buildings",25,2],["Catch 1 Golden Chocolate",1,3]];
+// state
+const D=()=>({v:1,c:0,ever:0,run:0,clicks:0,gems:0,b:Array(12).fill(0),up:{},pets:{},eq:[],worlds:[0],w:0,sk:{},ach:{},q:{d:"",p:[0,0,0],cl:[0,0,0]},shards:0,pres:0,gold:0,t:Date.now(),gt:60,buf:[],set:{snd:1,mus:0,red:0,sci:0,off:8,dm:1,gi:90},audit:[],dev:null});
+const num=(v,d=0)=>Number.isFinite(v)&&v>=0?Math.min(v,CAP):d;
+function valid(o){if(!o||typeof o!=="object"||o.v!==1)return null;const d=D();
+ ["c","ever","run","clicks","gems","shards","pres","gold"].forEach(k=>d[k]=num(o[k]));
+ if(Array.isArray(o.b)&&o.b.length===12)d.b=o.b.map(x=>Math.floor(num(x)));
+ for(const k in o.up||{})if(UM[k])d.up[k]=1;for(const k in o.sk||{})if(SM[k])d.sk[k]=1;for(const k in o.ach||{})d.ach[k]=1;
+ for(const k in o.pets||{})if(P[k])d.pets[k]=Math.min(10,Math.max(1,Math.floor(num(o.pets[k],1))));
+ d.eq=(o.eq||[]).filter(i=>d.pets[i]).slice(0,12);d.worlds=[...new Set((o.worlds||[0]).filter(i=>W[i]))];if(!d.worlds.includes(0))d.worlds.push(0);
+ d.w=d.worlds.includes(o.w)?o.w:0;if(o.q&&Array.isArray(o.q.p)&&o.q.p.length===3)d.q={d:String(o.q.d),p:o.q.p.map(x=>num(x)),cl:o.q.cl.map(x=>x?1:0)};
+ Object.assign(d.set,Object.fromEntries(Object.entries(o.set||{}).filter(([k,v])=>k in d.set&&Number.isFinite(+v)).map(([k,v])=>[k,+v])));
+ d.t=num(o.t,Date.now());d.audit=Array.isArray(o.audit)?o.audit.slice(0,50):[];d.dev=o.dev&&o.dev.h?o.dev:null;d.gt=num(o.gt,60);return d}
+const save=()=>{try{S.t=Date.now();localStorage.setItem(KEY,JSON.stringify(S));S.sv=Date.now()}catch(e){toast("Save failed: "+e.message)}};
+const enc=o=>"CHOCO1:"+btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+const dec=s=>{if(!s.startsWith("CHOCO1:"))throw 0;return valid(JSON.parse(decodeURIComponent(escape(atob(s.slice(7))))))};
+// calc
+const petB=i=>P[i].pct*(1+.2*(S.pets[i]-1))/100;
+function calc(){let g=1,k=1,cc=.02,cm=5,pmx=1,slots=3,wex=1,off=.5,cmx=1,pg=1;const bmul=Array(12).fill(1);
+ for(const id in S.up){const e=UM[id].e;if(e.t=="b")bmul[e.i]*=e.m;else if(e.t=="k")k*=e.m;else if(e.t=="cc")cc+=e.v;else if(e.t=="cm")cm+=e.v;else if(e.t=="slot")slots++;else if(e.t=="pm")pmx*=e.m;else g*=e.m}
+ for(const id in S.sk){const e=SM[id].e;if(e=="k")k*=1.25;else if(e=="p")g*=1.1;else if(e=="pm")pmx*=1.1;else if(e=="cc")cc+=.02;else if(e=="w")wex*=1.1;else if(e=="o")off+=.1;else if(e=="f")cmx*=.97;else pg*=1.1}
+ let pp=0,pc=0;S.eq.forEach(i=>{const b=petB(i)*pmx;P[i].type=="p"?pp+=b:pc+=b});
+ let wm=1;S.worlds.forEach(i=>wm+=.1*i*wex);const bf={g:1,k:1},t=Date.now();S.buf.forEach(f=>{if(f.end>t)bf[f.k]*=f.m});
+ let base=0;S.b.forEach((n,i)=>base+=n*BN[i][3]*bmul[i]);
+ const cps=Math.min(base*g*wm*(1+pp)*(1+.02*S.shards)*bf.g*S.set.dm,CAP);
+ return{cps,click:Math.min((1+cps*.01)*k*(1+pc)*bf.k*S.set.dm,CAP),cc:Math.min(cc,.75),cm,slots,cmx,off:Math.min(off,1),pg}}
+const bcost=(i,n)=>BN[i][2]*1.15**S.b[i]*((1.15**n-1)/.15)*K.cmx;
+const bmax=i=>Math.max(0,Math.floor(Math.log(1+S.c*.15/(BN[i][2]*1.15**S.b[i]*K.cmx))/Math.log(1.15)));
+function earn(x){x=Math.max(0,x);if(!(x<CAP))x=0;S.c=Math.min(CAP,S.c+x);S.run=Math.min(CAP,S.run+x);S.ever=Math.min(CAP,S.ever+x)}
+const spend=x=>{if(S.c<x)return false;S.c-=x;return true};
+const gem=n=>{S.gems+=n};
+function toast(m){const e=document.createElement("div");e.className="t";e.textContent=m;$("#toasts").append(e);setTimeout(()=>e.remove(),4500)}
+// audio
+let ac,mt;function snd(f=440,d=.06){if(!S.set.snd)return;try{ac=ac||new AudioContext();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;g.gain.value=.04;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(e){}}
+function music(){clearInterval(mt);if(S.set.mus)mt=setInterval(()=>snd([262,294,330,392,440][Math.random()*5|0],.4),900)}
+// click
+function fx(x,y,t,c){if(S.set.red)return;const e=document.createElement("div");e.className="fl";e.textContent=(c?"💥 ":"+")+t;e.style.cssText=`left:${x}px;top:${y}px;font-size:${c?24:16}px`;document.body.append(e);setTimeout(()=>e.remove(),900);
+ const p=document.createElement("div");p.className="fl";p.textContent="🍫";p.style.cssText=`left:${x+(Math.random()*60-30)}px;top:${y}px`;document.body.append(p);setTimeout(()=>p.remove(),900)}
+$("#bar").onclick=e=>{const r=e.currentTarget.getBoundingClientRect(),c=Math.random()<K.cc;let v=K.click*(c?K.cm:1);earn(v);S.clicks++;S.q.p[0]++;fx(e.clientX||r.left+r.width/2,e.clientY||r.top+r.height/2,fmt(v),c);snd(c?660:330)};
+// golden
+function spawnGold(storm){const b=document.createElement("button");b.className="gold";b.textContent=storm?"🍫":"🌟";b.title="Golden Chocolate! Click me";b.style.left=(8+Math.random()*80)+"vw";b.style.top=(15+Math.random()*65)+"vh";document.body.append(b);
+ const kill=setTimeout(()=>b.remove(),storm?4000:13000);
+ b.onclick=()=>{clearTimeout(kill);b.remove();if(storm){earn(K.cps*5+1);snd(520);return}S.gold++;S.q.p[2]++;const r=Math.random(),t=Date.now();
+  if(r<.4){S.buf.push({k:"g",m:7,end:t+3e4,n:"Frenzy ×7"});toast("Production Frenzy ×7 for 30s!")}
+  else if(r<.75){S.buf.push({k:"k",m:10,end:t+2e4,n:"Click Frenzy ×10"});toast("Click Frenzy ×10 for 20s!")}
+  else{const v=Math.min(S.c*.15,K.cps*900)+K.cps*13+13;earn(v);toast("Lucky! +"+fmt(v)+" Chocolate")}snd(880,.2)}}
+function storm(){toast("🍫 Chocolate storm! Catch the drops!");for(let i=0;i<10;i++)setTimeout(()=>spawnGold(1),i*500)}
+// loop
+function offline(dt){const s=Math.min(dt,S.set.off*3600),g=K.cps*s*K.off;earn(g);if(g>0)toast(`Welcome back! While you were away ${Math.floor(s/3600)}h ${Math.floor(s%3600/60)}m: +${fmt(g)} Chocolate`)}
+function tick(){try{const t=Date.now();let dt=(t-S.t)/1000;S.t=t;K=calc();if(dt>5){offline(dt);dt=0}dt=Math.max(0,dt);earn(K.cps*dt);
+ S.gt-=dt;if(S.gt<=0){S.gt=S.set.gi*(.7+Math.random()*.6);S.ever>=1e9&&Math.random()<.07?storm():spawnGold()}
+ S.buf=S.buf.filter(f=>f.end>t);const d=new Date().toDateString();if(S.q.d!==d)S.q={d,p:[0,0,0],cl:[0,0,0]};
+ $("#choc").textContent=fmt(S.c);$("#cps").textContent=fmt(K.cps);$("#cpc").textContent=fmt(K.click);$("#life").textContent=fmt(S.ever);$("#gems").textContent=fmt(S.gems);
+ $("#buffs").innerHTML=S.buf.map(f=>`<span class="chip">${f.n} ${Math.ceil((f.end-t)/1e3)}s</span>`).join("")+(S.gt>0?`<div><small>Next golden in ~${Math.ceil(S.gt)}s</small></div>`:"");
+ $("#bar").className=S.pres>=5?"s2":S.pres>=1?"s1":"";document.body.classList.toggle("red",!!S.set.red);
+ const [c1,c2]=W[S.w][3].split(",");document.body.style.setProperty("--b1",c1);document.body.style.setProperty("--b2",c2)}catch(e){console.error(e)}}
+function achCheck(){A.forEach(a=>{if(!S.ach[a.id]&&a.cur()>=a.t){S.ach[a.id]=1;gem(a.g);toast(`🏆 ${a.n} (+${a.g}💎)`)}})}
+// panels
+const rend=(id,h)=>{if(last[id]!==h){last[id]=h;$("#"+id).innerHTML=h}};
+const btn=(a,x,txt,ok=true,cls="")=>`<button class="${cls}" data-a="${a}" data-x="${x}" ${ok?"":"disabled"}>${txt}</button>`;
+function fB(){const cnt=[1,10,100,"MAX"];let h=`<div>${cnt.map(c=>btn("mode",c,"Buy "+c,true,bm==c?"go":"")).join(" ")}</div><br>`;
+ BN.forEach((b,i)=>{if(!(S.b[i]>0||S.ever>=b[2]*.6||S.c>=b[2]))return void(h+=`<div class="card dim"><div class="ic">🔒</div><div><b>???</b><br><small>Unlock: reach ${fmt(b[2]*.6)} lifetime Chocolate</small></div></div>`);
+  let n=bm==="MAX"?bmax(i):bm;const sn=Math.max(1,n),c=bcost(i,sn),ok=S.c>=c;
+  h+=`<div class="card ${ok?"":"dim"}" title="${b[4]}"><div class="ic">${b[1]}</div><div><b>${b[0]}</b> <span class="chip">${S.b[i]}</span><br><small>${b[4]} +${fmt(b[3])}/s each</small></div>${btn("b",i+"_"+sn,`×${sn}<br>${fmt(c)}`,ok)}</div>`});return h}
+const uCard=u=>{const own=S.up[u.id],ok=!own&&u.ok(),can=ok&&S.c>=u.c;return`<div class="card ${can||own?"":"dim"}"><div class="ic">${own?"✅":ok?"⬆️":"🔒"}</div><div><b>${u.n}</b><br><small>${u.d}${own?"":" · Needs: "+u.rq}</small></div>${own?"":btn("u",u.id,fmt(u.c),can)}</div>`};
+function fShop(){const a=U.filter(u=>!S.up[u.id]&&u.ok()).sort((x,y)=>x.c-y.c);return`<b>Shop</b> <small>(${a.length} available · all in Upgrades tab)</small><br><br>`+(a.slice(0,10).map(uCard).join("")||"<small>Nothing available yet. Keep producing!</small>")}
+const fU=()=>`<div class="grid">${U.map(uCard).join("")}</div>`;
+function fP(){let h=`<b>Equipped ${S.eq.length}/${K.slots}</b><br><br><div class="grid">`;
+ P.forEach((p,i)=>{const lv=S.pets[i],eq=S.eq.includes(i),b=(p.pct*(lv?1+.2*(lv-1):1)).toFixed(1),lc=Math.floor(p.cost*.5*(lv||1)**2);
+  h+=`<div class="card ${lv?"":"dim"}"><div class="ic">${p.e}</div><div><b>${p.n}</b><br><small>${RN[p.r]} · +${b}% ${p.type=="p"?"production":"click"}${lv?" · Lv "+lv+"/10":""}</small></div><div>${lv?btn("pe",i,eq?"Unequip":"Equip",eq||S.eq.length<K.slots)+(lv<10?btn("pl",i,"Lv "+fmt(lc),S.c>=lc):""):btn("pb",i,fmt(p.cost),S.c>=p.cost)}</div></div>`});return h+"</div>"}
+function fW(){return`<div class="grid">${W.map((w,i)=>{const un=S.worlds.includes(i),req=i&&!S.worlds.includes(i-1)?"Unlock previous world":i&&S.b[i]<5*i?`Own ${5*i} ${BN[i][0]}`:"",ok=!un&&!req&&S.c>=w[2];
+ return`<div class="card" style="background:linear-gradient(135deg,${w[3]})"><div class="ic">${w[1]}</div><div><b>${w[0]}</b><br><small>${i?"+"+(i*10)+"% production · ":""}${un?"Unlocked":"Cost "+fmt(w[2])+(req?" · "+req:"")}</small></div>${un?btn("ws",i,S.w==i?"Here":"Visit",S.w!=i):btn("wu",i,"Unlock",ok)}</div>`}).join("")}</div>`}
+function fS(){const sh=Math.floor(Math.sqrt(S.run/1e12)*(1.1**Object.keys(S.sk).filter(k=>SM[k].e=="pg").length)),can=S.run>=1e12;
+ let h=`<div class="card"><div class="ic">🌟</div><div><b>Prestige</b> (Cocoa Shards: ${S.shards}, +2% production each, prestiged ${S.pres}×)<br><small>Unlocks at ${fmt(1e12)} Chocolate this run. Would give ${can?sh:0} shards + 5💎. Resets Chocolate, buildings and upgrades; keeps pets, worlds, skills, achievements and Gems.</small></div>${btn("pr","",can&&sh>0?"Prestige":"Locked",can&&sh>0)}</div>`;
+ h+=`<div>💎 ${fmt(S.gems)} <span class="b" data-a="skr" style="margin-left:8px">Reset skills (full refund)</span></div><br>`;
+ BR.forEach(b=>{h+=`<b>${b[1]}</b><div class="grid">`+SKL.filter(s=>s.b==b[1]).map(s=>{const own=S.sk[s.id],pre=!s.pre||S.sk[s.pre],ok=!own&&pre&&S.gems>=s.cost;return`<div class="card ${own?"":"dim"}"><div class="ic">${own?"✅":pre?"🔓":"🔒"}</div><div><b>${s.n}</b><br><small>${s.d}${s.pre?" · needs "+SM[s.pre].n:""}</small></div>${own?"":btn("sk",s.id,s.cost+"💎",ok)}</div>`}).join("")+"</div><br>"});return h}
+function fA_(){let h="<b>Daily quests</b><div class='grid'>"+QD.map((q,i)=>{const p=Math.min(S.q.p[i],q[1]),done=p>=q[1];return`<div class="card"><div><b>${q[0]}</b><div class="bar"><i style="width:${Math.floor(p/q[1]*20)*5}%"></i></div></div>${S.q.cl[i]?"✅":btn("qc",i,`+${q[2]}💎`,done)}</div>`}).join("")+"</div><br><b>Achievements</b> ("+Object.keys(S.ach).length+"/"+A.length+")<div class='grid'>"+A.map(a=>{const d=S.ach[a.id],p=Math.min(a.cur()/a.t,1);return`<div class="card ${d?"":"dim"}"><div class="ic">${d?"🏆":"🎯"}</div><div><b>${a.n}</b><div class="bar"><i style="width:${Math.floor(p*20)*5}%"></i></div></div><small>+${a.g}💎</small></div>`}).join("")+"</div>";return h}
+const fT=()=>`<div class="grid">${[["Chocolate",fmt(S.c)],["Lifetime",fmt(S.ever)],["This run",fmt(S.run)],["Per second",fmt(K.cps)],["Per click",fmt(K.click)],["Clicks",fmt(S.clicks)],["Buildings",fmt(S.b.reduce((a,b)=>a+b,0))],["Upgrades",Object.keys(S.up).length+"/"+U.length],["Pets",Object.keys(S.pets).length+"/30"],["Worlds",S.worlds.length+"/8"],["Skills",Object.keys(S.sk).length+"/"+SKL.length],["Achievements",Object.keys(S.ach).length+"/"+A.length],["Golden caught",S.gold],["Prestiges",S.pres],["Crit chance",(K.cc*100).toFixed(0)+"%"],["Offline efficiency",(K.off*100).toFixed(0)+"% (max "+S.set.off+"h)"]].map(([a,b])=>`<div class="card"><b>${a}</b><span style="margin-left:auto">${b}</span></div>`).join("")}</div>`;
+const tg=(k,t)=>btn("tg",k,`${t}: ${S.set[k]?"ON":"OFF"}`);
+const fG=()=>`<div class="grid">${tg("snd","Sound")}${tg("mus","Music")}${tg("red","Reduced animations")}${tg("sci","Scientific numbers")}${btn("offc","","Max offline: "+S.set.off+"h")}</div><p><small>Autosaves every 30s and on exit. Last save: ${S.sv?new Date(S.sv).toLocaleTimeString():"not yet"}.</small></p>
+<p>${btn("save","","Save now")} ${btn("exp","","Export save")} ${btn("imp","","Import save")} ${btn("rst","","Reset progress")}</p><textarea id="io" rows="4" style="width:100%" placeholder="Export appears here; paste a save here to import"></textarea><p><small>Import is validated; a bad save never overwrites your current one. Resetting wipes everything, including pets, Gems and prestige.</small></p>`;
+const aud=()=>S.audit.map(x=>`<div><small>${x.t}: ${x.a}</small></div>`).join("")||"<small>No entries</small>";
+function fM(){const hd=`<div class="t" style="border-color:#ff6f91"><b>⚠ LOCAL DEVELOPER PANEL</b><br><small>This is a static single-player site: the passphrase is only a convenience lock stored as a hash in this browser, not real security. Anyone with browser access can edit saves. Remote or multi-player administration needs a server with real authentication, authorization, rate limiting and audit logs (not included).</small></div><br>`;
+ if(!adm)return hd+`<b>${S.dev?"Enter":"Create"} dev passphrase</b><br><input id="pw" type="password" autocomplete="off"> ${btn("alogin","",S.dev?"Unlock":"Create & unlock")}<p><small>${S.dev?"3 wrong tries locks for 30s.":"Min 6 characters."}</small></p>`;
+ return hd+`<div class="grid"><div><input id="amt" type="number" value="1000" style="width:110px">${btn("acur","c+","+Choc")}${btn("acur","c-","−Choc")}${btn("acur","g+","+Gems")}${btn("acur","g-","−Gems")}</div>
+ <div><select id="apet">${P.map((p,i)=>`<option value="${i}">${p.n}</option>`).join("")}</select>${btn("apet","","Grant pet")}</div><div><select id="awld">${W.map((w,i)=>`<option value="${i}">${w[0]}</option>`).join("")}</select>${btn("awld","","Unlock world")}</div>
+ <div>Production mult (0.1–1000): <input id="adm" type="number" value="${S.set.dm}" style="width:80px">${btn("aset","dm","Set")}<br>Golden interval s (5–600): <input id="agi" type="number" value="${S.set.gi}" style="width:80px">${btn("aset","gi","Set")}</div></div>
+ <p>${btn("alock","","Lock panel")}</p><b>Player stats</b><pre style="white-space:pre-wrap;font-size:12px">${JSON.stringify({chocolate:S.c,lifetime:S.ever,gems:S.gems,clicks:S.clicks,buildings:S.b,upgrades:Object.keys(S.up).length,pets:S.pets,worlds:S.worlds,skills:Object.keys(S.sk).length,shards:S.shards},null,1)}</pre><b>Audit log</b>${aud()}`}
+const PN={upgrades:fU,pets:fP,worlds:fW,skills:fS,achievements:fA_,stats:fT,settings:fG,admin:fM},DYN=["upgrades","pets","worlds","skills","achievements","stats"];
+const TABS=["Game","Upgrades","Pets","Worlds","Skills","Achievements","Stats","Settings"].map(n=>[n.toLowerCase(),n==="Skills"?"Skill Tree":n==="Stats"?"Statistics":n]);
+$("#nav").innerHTML=TABS.map(([k,n])=>`<button data-a="tab" data-x="${k}">${n}</button>`).join("");
+function R(force){const g=tab==="game";$("#gv").hidden=!g;$("#panel").hidden=g;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.x===tab));
+ if(g){rend("bld",fB());rend("shop",fShop())}else if(force||DYN.includes(tab))rend("panel",PN[tab]())}
+// actions
+const audit=a=>{S.audit.unshift({t:new Date().toLocaleString(),a});S.audit.length=Math.min(S.audit.length,50)};
+async function sha(s,salt){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(salt+s));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+const A_={
+ tab(x){tab=x;last={};document.getElementById("panel").scrollTop=0},dev(){if(DEV){tab="admin";last={}}},
+ mode(x){bm=x=="MAX"?"MAX":+x},
+ b(x){const[i,n]=x.split("_").map(Number);if(spend(bcost(i,n))){S.b[i]+=n;S.q.p[1]+=n;snd(300)}},
+ u(x){const u=UM[x];if(u&&!S.up[x]&&u.ok()&&spend(u.c)){S.up[x]=1;snd(500)}},
+ pb(x){const p=P[x];if(!S.pets[x]&&spend(p.cost)){S.pets[x]=1;toast("New pet: "+p.n)}},
+ pe(x){x=+x;const k=S.eq.indexOf(x);if(k>=0)S.eq.splice(k,1);else if(S.eq.length<K.slots)S.eq.push(x)},
+ pl(x){const l=S.pets[x];if(l<10&&spend(Math.floor(P[x].cost*.5*l*l)))S.pets[x]++},
+ wu(x){x=+x;const w=W[x];if(!S.worlds.includes(x)&&S.worlds.includes(x-1)&&S.b[x]>=5*x&&spend(w[2])){S.worlds.push(x);gem(3);toast(`${w[0]} unlocked! +3💎`)}},
+ ws(x){if(S.worlds.includes(+x))S.w=+x},
+ sk(x){const s=SM[x];if(s&&!S.sk[x]&&(!s.pre||S.sk[s.pre])&&S.gems>=s.cost){S.gems-=s.cost;S.sk[x]=1}},
+ skr(){const r=Object.keys(S.sk).reduce((a,k)=>a+SM[k].cost,0);if(r&&confirm(`Reset all skills and refund all ${r} spent Gems?`)){S.sk={};gem(r)}},
+ qc(x){const q=QD[x];if(!S.q.cl[x]&&S.q.p[x]>=q[1]){S.q.cl[x]=1;gem(q[2]);toast(`Quest done! +${q[2]}💎`)}},
+ pr(){const sh=Math.floor(Math.sqrt(S.run/1e12)*1.1**Object.keys(S.sk).filter(k=>SM[k].e=="pg").length);
+  if(S.run>=1e12&&sh>0&&confirm(`Prestige for ${sh} Cocoa Shards and 5 Gems?\n\nRESETS: Chocolate, all buildings, all upgrades.\nKEEPS: pets, worlds, skills, Gems, achievements, shards.`)){S.shards+=sh;S.pres++;gem(5);S.c=0;S.run=0;S.b=Array(12).fill(0);S.up={}}},
+ tg(x){S.set[x]=S.set[x]?0:1;if(x=="mus")music()},
+ offc(){const o=[1,2,4,8,12,24,48,72];S.set.off=o[(o.indexOf(S.set.off)+1)%o.length]},
+ save(){save();toast("Saved")},
+ exp(){const s=enc(S);$("#io").value=s;navigator.clipboard&&navigator.clipboard.writeText(s).then(()=>toast("Copied to clipboard"),()=>{})},
+ imp(){try{const d=dec($("#io").value.trim());if(!d)throw 0;d.dev=S.dev;S=d;save();toast("Import successful")}catch(e){toast("Import failed: invalid save. Your current save is untouched.")}},
+ rst(){if(confirm("Reset ALL progress? This cannot be undone.")&&confirm("Really wipe everything?")){const dv=S.dev;S=D();S.dev=dv;save();toast("Progress reset")}},
+ async alogin(){if(!DEV)return;const now=Date.now();if(now<lockT)return toast("Locked. Try again shortly.");const p=$("#pw").value;
+  if(!crypto.subtle)return toast("Needs a secure context (https or localhost).");
+  if(!S.dev){if(p.length<6)return toast("Use at least 6 characters");const salt=crypto.randomUUID();S.dev={salt,h:await sha(p,salt)};adm=true;audit("Created dev passphrase")}
+  else if(await sha(p,S.dev.salt)===S.dev.h){adm=true;fails=0;audit("Dev panel unlocked")}
+  else{fails++;audit("Failed unlock attempt");if(fails>=3){lockT=now+3e4;fails=0;toast("Too many attempts: locked 30s")}else toast("Wrong passphrase")}R(true)},
+ alock(){adm=false;audit("Dev panel locked")},
+ acur(x){if(!adm)return;const a=+$("#amt").value;if(!Number.isFinite(a)||a<0||a>1e15)return toast("Amount must be 0 to 1e15");
+  if(x[0]=="c"){x[1]=="+"?earn(a):S.c=Math.max(0,S.c-a)}else S.gems=Math.max(0,S.gems+(x[1]=="+"?a:-a));audit(`${x} ${a}`)},
+ apet(){if(!adm)return;const i=+$("#apet").value;S.pets[i]=S.pets[i]||1;audit("Granted pet "+P[i].n)},
+ awld(){if(!adm)return;const i=+$("#awld").value;if(!S.worlds.includes(i))S.worlds.push(i);audit("Unlocked world "+W[i][0])},
+ aset(x){if(!adm)return;const v=+$(x=="dm"?"#adm":"#agi").value,[lo,hi]=x=="dm"?[.1,1e3]:[5,600];if(!(v>=lo&&v<=hi))return toast(`Value must be ${lo}–${hi}`);S.set[x]=v;audit(`Set ${x}=${v}`)}
+};
+document.addEventListener("click",e=>{const t=e.target.closest("[data-a]");if(!t||t.disabled)return;try{const r=A_[t.dataset.a];r&&r(t.dataset.x);K=calc();R(true);achCheck()}catch(x){toast("Error: "+x.message)}});
+window.addEventListener("error",e=>toast("Error: "+e.message));
+// init
+try{const raw=localStorage.getItem(KEY);S=(raw&&valid(JSON.parse(raw)))||D()}catch(e){S=D();toast("Save could not be loaded; started fresh.")}
+K=calc();tick();R(true);music();
+setInterval(tick,100);setInterval(()=>{achCheck();R(false)},1000);setInterval(save,3e4);
+addEventListener("beforeunload",save);document.addEventListener("visibilitychange",()=>document.hidden&&save());
+if(!DEV)$("#devbtn").remove();
+$("#load").remove();
+</script></body></html>
